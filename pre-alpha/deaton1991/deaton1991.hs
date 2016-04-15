@@ -97,9 +97,10 @@ interp x0 y0 x = mapInterp (M.fromAscList al) x
 main = do 
     eRaw <- getLine
     let v = findv (read eRaw :: Double) vListDef
-    print $ v
+    let c = g v
+    print v
     putStrLn ""
-    print $ g v
+    print c
 
 
 
