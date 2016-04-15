@@ -83,8 +83,6 @@ def create_grid(aMax, numA, aBar):
 
 def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
-    #dCdM = np.diff(cNext, axis=0) / np.diff(mGrid, axis=0)
-    #dCdM = np.vstack([np.ones((1, 2)), dCdM]) # temporary solution!
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
 params = {'beta': 0.7,
