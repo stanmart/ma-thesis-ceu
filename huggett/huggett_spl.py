@@ -16,7 +16,7 @@ def mu(c, gamma):
     """Marginal utility function"""
     return c ** (-gamma)
 
-def excess_asset_demand(r, params, shocks):
+def get_policy_functions(r, params):
     beta = params['beta']
     betahat = params['betahat']
     gamma = params['gamma']
@@ -24,6 +24,8 @@ def excess_asset_demand(r, params, shocks):
     e = params['e']
     Pi = params['Pi']
     aBar = params['aBar']
+
+    es = range(0, len(e))
 
     # Discretize grid for resources
     aMax = 10
@@ -45,7 +47,7 @@ def excess_asset_demand(r, params, shocks):
         cSplines = []
         cNext = np.zeros(np.shape(c))
         dCdM = np.zeros(np.shape(c))
-        for i in range(0, len(e)):
+        for i in es:
             cSplines.append(InterpolatedUnivariateSpline(mGrid[:,i], c[:,i]))
             cNext[:,i] = cSplines[i](mNext[:,i])
             cNext[mNext[:,i] < mGrid[0,i], i] = mNext[mNext[:,i] < mGrid[0,i], i]
@@ -58,7 +60,7 @@ def excess_asset_demand(r, params, shocks):
 
         # Compare policy functions
         cNewComp = np.zeros(np.shape(c))
-        for i in range(0, len(e)):
+        for i in es:
             spl = InterpolatedUnivariateSpline(mGridNew[:,i], cNew[:,i])
             cNewComp[:,i] = spl(mGrid[:,i])
             cNewComp[mGrid[:,i] < mGridNew[0,i], i] = mGrid[mGrid[:,i] < mGridNew[0,i], i]
@@ -70,12 +72,67 @@ def excess_asset_demand(r, params, shocks):
 
         c = cNew
         mGrid = mGridNew
+        
+    sGrid = (mGrid - np.expand_dims(e, 0) + aBar) / (1+r)
+    grids = {'a': aGrid,
+             'm': mGrid,
+             's': sGrid,
+             'c': c,
+             'mN': mNext
+             }
 
-    plt.plot(mGrid, c, 'b-', mNext, dCdM, 'r--', mNext, cNext, 'ko')
-    plt.show()
-    return (mGrid, c)
+    return grids
 
+def excess_asset_demand(r, params, grids, shocks):
+    sGrid = grids['s']
+    mGrid = grids['m']
+    aGrid = grids['a']
 
+    Pi   = params['Pi']
+    e    = params['e']
+    aBar = params['aBar']
+    es   = range(0, len(e))
+
+    N, T = np.shape(shocks)
+    simA = np.zeros((N, T))
+    simE = np.ones((N, T), dtype=np.int)
+    PSD  = np.linalg.matrix_power(Pi, 100)[:, 0]
+
+    sSplines = []
+    for i in es:
+        sSplines.append(InterpolatedUnivariateSpline(sGrid[:,i], aGrid))
+
+    for t in range(1, T):
+
+        # Endowment
+        for i in es:
+            PiColCS = np.cumsum(Pi[:, i])
+            idx = simE[:, t-1] == i
+            simE[idx, t] = np.searchsorted(PiColCS, shocks[idx, t])
+
+        # Enforce LLN
+        excess = np.zeros(len(e), dtype=np.int)
+        for i in range(0, len(e) - 1):
+            targets = np.where(simE[:, t] == i)[0]
+            misses  = np.where(simE[:, t] > i)[0]
+            excess[i] = np.round(len(targets) - round(PSD[i]*N))
+            if excess[i] < 0:
+                x = misses[0:2]
+                simE[x, t] = i
+            if excess[i] > 0:
+                simE[targets[0 : excess[i]], t] = i + 1
+
+        # Savings
+        aNow = np.zeros(N)
+        for i in es:
+            idx = simE[:, t] == i
+            aNow[idx] = sSplines[i](simA[idx, t-1])
+        simA[:, t] = np.maximum(aNow, aBar)
+
+    return np.sum(simA[:, -1])
+
+def get_excess_asset_demand(r, params, shocks):
+    return excess_asset_demand(r, params, get_policy_functions(r, params), shocks)
 
 def create_grid(aMax, numA, aBar):
     """Creates initial grid for a"""
@@ -85,12 +142,18 @@ def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
-params = {'beta': 0.7,
-          'delta': 0.99,
-          'gamma': 3,
-          'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
-          'aBar': -2,
-          'e': np.array([0.1, 1]),
-          'betahat': 0.7
-          }
-print(excess_asset_demand(0, params, ""))
+if __name__ == '__main__':
+    params = {'beta': 0.7,
+              'delta': 0.99,
+              'gamma': 3,
+              'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
+              'aBar': -2,
+              'e': np.array([0.1, 1]),
+              'betahat': 0.7
+              }
+
+    shocks = np.random.rand(10000, 2000)
+    
+    r = -0.0025
+    EAD = get_excess_asset_demand(r, params, shocks)
+    print(EAD)

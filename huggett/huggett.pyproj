@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>99f9aacc-9d26-4c84-a92a-051c05473acd</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>huggett.py</StartupFile>
+    <StartupFile>huggett_spl.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -25,7 +25,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="huggett.py" />
+    <Compile Include="huggett_spl.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="{6631a4cf-ec9b-4242-80e9-b2f2a7443627}\3.5" />

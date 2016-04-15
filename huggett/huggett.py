@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import exp, log
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy.interpolate import UnivariateSpline
 
 # Utility functions
