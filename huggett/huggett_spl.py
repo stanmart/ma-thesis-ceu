@@ -2,6 +2,8 @@ import numpy as np
 from numpy import exp, log
 import matplotlib.pyplot as plt
 from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy.optimize import broyden1, fsolve
+from concurrent.futures import ProcessPoolExecutor
 
 # Utility functions
 
@@ -24,6 +26,9 @@ def get_policy_functions(r, params):
     e = params['e']
     Pi = params['Pi']
     aBar = params['aBar']
+
+    # Natural borrowing constraint
+    if r > 0: aBar = max(aBar * r, -np.min(e) + 1e-4) / r
 
     es = range(0, len(e))
 
@@ -50,6 +55,7 @@ def get_policy_functions(r, params):
         for i in es:
             cSplines.append(InterpolatedUnivariateSpline(mGrid[:,i], c[:,i]))
             cNext[:,i] = cSplines[i](mNext[:,i])
+            #cSplines[i].set_smoothing_factor(1)
             cNext[mNext[:,i] < mGrid[0,i], i] = mNext[mNext[:,i] < mGrid[0,i], i]
             dCdM[:,i] = cSplines[i](mNext[:,i], 1)
         
@@ -131,6 +137,11 @@ def excess_asset_demand(r, params, grids, shocks):
 
     return np.sum(simA[:, -1])
 
+def get_eq_r(params, shocks):
+    #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
+    r = fsolve(lambda r: get_excess_asset_demand(r, params, shocks), 0)
+    return r 
+
 def get_excess_asset_demand(r, params, shocks):
     return excess_asset_demand(r, params, get_policy_functions(r, params), shocks)
 
@@ -142,18 +153,40 @@ def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
-if __name__ == '__main__':
-    params = {'beta': 0.7,
-              'delta': 0.99,
-              'gamma': 3,
-              'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
-              'aBar': -2,
-              'e': np.array([0.1, 1]),
-              'betahat': 0.7
-              }
+PARAMS = [[{'beta': beta,
+            'betahat': betahat,
+            'delta': 0.99,
+            'gamma': 3,
+            'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
+            'aBar': -2,
+            'e': np.array([0.1, 1])
+            }
+           for betahat in np.arange(beta, 1.0001, 0.025)
+           ]
+          for beta in [0.6, 0.7, 0.8, 0.9, 1]
+          ]
 
-    shocks = np.random.rand(10000, 2000)
-    
-    r = -0.0025
-    EAD = get_excess_asset_demand(r, params, shocks)
-    print(EAD)
+SHOCKS = np.random.rand(5000, 1000)
+MARKERS = ['bx-', 'go-', 'r^-', 'mD-', 'ks'] 
+
+def paramfun(params): return get_eq_r(params, SHOCKS)
+
+def main():
+    for i in range(len(PARAMS)):
+        with ProcessPoolExecutor(max_workers=2) as executor:
+            Gz = []
+            for (p, r) in zip(PARAMS[i], executor.map(paramfun, PARAMS[i])):
+                Gz.append((p['betahat'], r))
+        executor.shutdown()
+        G = list(zip(*Gz))
+        plt.plot(G[0], G[1], MARKERS[i])
+    plt.legend(['beta = 0.6',
+                'beta = 0.7',
+                'beta = 0.8',
+                'beta = 0.9',
+                'beta = 1'
+                ])
+    plt.show()
+
+if __name__ == '__main__':
+    main()
