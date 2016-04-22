@@ -1,3 +1,6 @@
+"""A module for calculating value functions and simulating
+   asset demand in an endowment economy with hyperbolic
+   discounters"""
 
 import numpy as np
 from numpy import exp, log
@@ -154,46 +157,4 @@ def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
-PARAMS = [[{'beta': beta,
-            'betahat': betahat,
-            'delta': 0.99,
-            'gamma': 3,
-            'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
-            'aBar': -2,
-            'e': np.array([0.1, 1])
-           }
-           for betahat in np.arange(beta, 1.0001, 0.02)
-          ]
-          for beta in [0.6, 0.7, 0.8, 0.9, 1]
-         ]
-
-SHOCKS = np.random.rand(5000, 1000)
-MARKERS = ['bx-', 'go-', 'r^-', 'mD-', 'ks']
-
 def paramfun(params): return get_eq_r(params, SHOCKS)
-
-def main():
-    for i in range(len(PARAMS)):
-        with ProcessPoolExecutor(max_workers=8) as executor:
-            Gz = []
-            for (p, r) in zip(PARAMS[i], executor.map(paramfun, PARAMS[i])):
-                Gz.append((p['betahat'], r))
-                print("beta = {0:.3f}, betahat = {1:.3f} -> r = {2: .2%}".format(
-                    p['beta'], p['betahat'], float(r))
-                     )
-        executor.shutdown()
-        G = list(zip(*Gz))
-        plt.plot(G[0], G[1], MARKERS[i])
-    plt.legend([r'$\beta = 0.6$',
-                r'$\beta = 0.7$',
-                r'$\beta = 0.8$',
-                r'$\beta = 0.9$',
-                r'$\beta = 1$'
-               ])
-    plt.xlabel(r'$\hat\beta$')
-    plt.ylabel(r'r')
-    plt.title('Eqilibrium interest rates')
-    plt.show()
-
-if __name__ == '__main__':
-    main()
