@@ -64,8 +64,8 @@ findv eps (v1 : v2 : vs) = if   dist v1 v2 < eps
 -- policy function
 
 g :: ValueGrid -> PolicyGrid
-g v = [maximumC (cGrid k) $ L.map (\c -> (u c) + beta * (evnext k c)) (cGrid k) | k <- mGrid]
-      where evnext k c = sum $ [yProb * (vfun v $ (pf $ k-c) + y) | (y, yProb) <- yProc]
+g v = [maximumC (cGrid k) $ L.map (\c -> u c + beta * evnext k c) (cGrid k) | k <- mGrid]
+      where evnext k c = sum [yProb * vfun v (pf (k - c) + y) | (y, yProb) <- yProc]
             cGrid  k = drop 1 $ linspace 0 (pf k) (numC+1)
             maximumC cGrid l = snd $ maximum $ zip l cGrid
 
@@ -91,8 +91,8 @@ mapInterp m x =
     where interpolate (a, av) (b, bv) x = av + (x-a) * (bv-av) / (b-a)
     
 interp :: [Double] -> [Double] -> Double -> Double
-interp x0 y0 x = mapInterp (M.fromAscList al) x
-                 where al = zip x0 y0
+interp x0 y0 = mapInterp M.fromAscList al
+    where al = zip x0 y0
 
 main = do 
     eRaw <- getLine

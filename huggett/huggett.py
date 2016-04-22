@@ -1,3 +1,4 @@
+
 import numpy as np
 from numpy import exp, log
 import matplotlib.pyplot as plt
@@ -36,16 +37,16 @@ def get_policy_functions(r, params):
     aMax = 10
     numA = 30
     aGrid = create_grid(aMax, numA, aBar)
-    
+
     # Initialization
     mNext = (1+r) * np.expand_dims(aGrid, 1) + np.expand_dims(e, 0) - aBar
     mGrid = mNext
     c     = mGrid
-    
+
     iter  = 0
     diffC = 1
-    
-    # Solve model using EGM    
+
+    # Solve model using EGM
     while diffC > 1e-8 and iter < 2000:
 
         # Find optimal policy function for current V
@@ -58,7 +59,7 @@ def get_policy_functions(r, params):
             #cSplines[i].set_smoothing_factor(1)
             cNext[mNext[:,i] < mGrid[0,i], i] = mNext[mNext[:,i] < mGrid[0,i], i]
             dCdM[:,i] = cSplines[i](mNext[:,i], 1)
-        
+
         # Calculate new policy function
         muNext = mu(cNext, gamma)
         cNew = euler(muNext, dCdM, r, beta, betahat, delta, Pi) ** (-1/gamma)
@@ -70,7 +71,7 @@ def get_policy_functions(r, params):
             spl = InterpolatedUnivariateSpline(mGridNew[:,i], cNew[:,i])
             cNewComp[:,i] = spl(mGrid[:,i])
             cNewComp[mGrid[:,i] < mGridNew[0,i], i] = mGrid[mGrid[:,i] < mGridNew[0,i], i]
-        
+
         d = (cNewComp-c)/c
         diffC = np.max(np.abs((cNewComp-c)/c))
         iter += 1
@@ -140,7 +141,7 @@ def excess_asset_demand(r, params, grids, shocks):
 def get_eq_r(params, shocks):
     #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
     r = fsolve(lambda r: get_excess_asset_demand(r, params, shocks), 0)
-    return r 
+    return r
 
 def get_excess_asset_demand(r, params, shocks):
     return excess_asset_demand(r, params, get_policy_functions(r, params), shocks)
@@ -160,32 +161,38 @@ PARAMS = [[{'beta': beta,
             'Pi': np.array([[0.5, 0.075], [0.5, 0.925]]),
             'aBar': -2,
             'e': np.array([0.1, 1])
-            }
-           for betahat in np.arange(beta, 1.0001, 0.025)
-           ]
-          for beta in [0.6, 0.7, 0.8, 0.9, 1]
+           }
+           for betahat in np.arange(beta, 1.0001, 0.02)
           ]
+          for beta in [0.6, 0.7, 0.8, 0.9, 1]
+         ]
 
 SHOCKS = np.random.rand(5000, 1000)
-MARKERS = ['bx-', 'go-', 'r^-', 'mD-', 'ks'] 
+MARKERS = ['bx-', 'go-', 'r^-', 'mD-', 'ks']
 
 def paramfun(params): return get_eq_r(params, SHOCKS)
 
 def main():
     for i in range(len(PARAMS)):
-        with ProcessPoolExecutor(max_workers=2) as executor:
+        with ProcessPoolExecutor(max_workers=8) as executor:
             Gz = []
             for (p, r) in zip(PARAMS[i], executor.map(paramfun, PARAMS[i])):
                 Gz.append((p['betahat'], r))
+                print("beta = {0:.3f}, betahat = {1:.3f} -> r = {2: .2%}".format(
+                    p['beta'], p['betahat'], float(r))
+                     )
         executor.shutdown()
         G = list(zip(*Gz))
         plt.plot(G[0], G[1], MARKERS[i])
-    plt.legend(['beta = 0.6',
-                'beta = 0.7',
-                'beta = 0.8',
-                'beta = 0.9',
-                'beta = 1'
-                ])
+    plt.legend([r'$\beta = 0.6$',
+                r'$\beta = 0.7$',
+                r'$\beta = 0.8$',
+                r'$\beta = 0.9$',
+                r'$\beta = 1$'
+               ])
+    plt.xlabel(r'$\hat\beta$')
+    plt.ylabel(r'r')
+    plt.title('Eqilibrium interest rates')
     plt.show()
 
 if __name__ == '__main__':

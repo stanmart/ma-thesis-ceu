@@ -25,10 +25,10 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="huggett_spl.py" />
+    <InterpreterReference Include="{6631a4cf-ec9b-4242-80e9-b2f2a7443627}\3.5" />
   </ItemGroup>
   <ItemGroup>
-    <InterpreterReference Include="{6631a4cf-ec9b-4242-80e9-b2f2a7443627}\3.5" />
+    <Compile Include="huggett.py" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
