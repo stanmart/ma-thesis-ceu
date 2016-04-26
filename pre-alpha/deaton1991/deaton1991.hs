@@ -1,5 +1,6 @@
 import Data.List as L
 import Data.Map  as M
+import Numeric.AD
 
 type ValueGrid = [Double]
 type PolicyGrid = [Double]
@@ -42,11 +43,11 @@ dist v v' = maximum . L.map abs $ zipWith (\x y -> (x-y)/y) v v'
 -- VFI
 
 vfun :: ValueGrid -> Double -> Double
-vfun v = interp mGrid v 
+vfun = interp mGrid 
 
 t :: ValueGrid -> ValueGrid
-t v = [maximum $ L.map (\c -> (u c) + beta * (evnext k c)) (cGrid k) | k <- mGrid]
-      where evnext k c = sum $ [yProb * (vfun v $ (pf $ k-c) + y) | (y, yProb) <- yProc]
+t v = [maximum $ L.map (\c -> u c + beta * evnext k c) (cGrid k) | k <- mGrid]
+      where evnext k c = sum [yProb * vfun v (pf (k - c) + y) | (y, yProb) <- yProc]
             cGrid  k = drop 1 $ linspace 0 (pf k) (numC+1)
       
 
@@ -91,7 +92,7 @@ mapInterp m x =
     where interpolate (a, av) (b, bv) x = av + (x-a) * (bv-av) / (b-a)
     
 interp :: [Double] -> [Double] -> Double -> Double
-interp x0 y0 = mapInterp M.fromAscList al
+interp x0 y0 = mapInterp $ M.fromAscList al
     where al = zip x0 y0
 
 main = do 
@@ -102,7 +103,8 @@ main = do
     putStrLn ""
     print c
 
+-- AD experiment
 
-
-
-
+vt = findv 0.001 vListDef
+vfunt = vfun vt
+-- d = diff vfunt 5
