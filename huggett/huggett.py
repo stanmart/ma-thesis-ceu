@@ -72,8 +72,8 @@ def get_policy_functions(rd, rl, params):
         cNewD = euler(muNext, dCdM, rd, beta, betahat, delta, Pi) ** (-1/gamma)
         cNewL = euler(muNext, dCdM, rl, beta, betahat, delta, Pi) ** (-1/gamma)
         cNew = np.zeros_like(cNewD)
-        cNew[idx_d] = cNewD[idx_d]
-        cNew[idx_l] = cNewD[idx_l]
+        cNew[idx_d, :] = cNewD[idx_d, :]
+        cNew[idx_l, :] = cNewL[idx_l, :]
         mGridNew = np.expand_dims(aGrid, 1) + cNew - aBar
 
         # Compare policy functions
@@ -151,11 +151,14 @@ def excess_asset_demand(rd, rl, params, grids, shocks):
 
 def get_eq_r(params, shocks):
     #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
-    r = fsolve(lambda r: get_excess_asset_demand(r, r, params, shocks), 0)
+    r = fsolve(lambda r: get_excess_asset_demand(r, r, params, shocks)  / np.shape(SHOCKS)[0], 0)
     return r
 
 def get_excess_asset_demand(rd, rl, params, shocks):
-    return excess_asset_demand(r, params, get_policy_functions(r, params), shocks)
+    return excess_asset_demand(rd, rl, params, get_policy_functions(rd, rl, params), shocks)
+
+def paramfun(params):
+    return get_eq_r(params, SHOCKS)
 
 def create_grid(aMax, numA, aBar):
     """Creates initial grid for a"""
@@ -168,4 +171,5 @@ def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
-def paramfun(params): return get_eq_r(params, SHOCKS)
+np.random.seed(19911110)
+SHOCKS = np.random.rand(5000, 1000)
