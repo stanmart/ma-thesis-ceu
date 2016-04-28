@@ -4,6 +4,7 @@
 
 import numpy as np
 from numpy import exp, log
+from math import inf
 import matplotlib.pyplot as plt
 from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.optimize import broyden1, fsolve
@@ -42,6 +43,16 @@ def get_policy_functions(rd, rl, params):
     aGrid = create_grid(aMax, numA, aBar)
     idx_l = aGrid < 0
     idx_d = aGrid >= 0
+    # if rl > rd:
+    #     aGrid = np.hstack([aGrid[idx_l],
+    #                        np.array([-inf]),
+    #                        np.array([inf]),
+    #                        aGrid[idx_d]
+    #                       ])
+    #     idx_l = aGrid < 0
+    #     idx_d = aGrid >= 0
+    #     aGrid[aGrid == -inf] = 0
+    #     aGrid[aGrid == inf] = 0
 
     # Initialization
     mNext = np.vstack(((1+rl) * np.expand_dims(aGrid[idx_l], 1) + np.expand_dims(e, 0) - aBar,
@@ -101,7 +112,7 @@ def get_policy_functions(rd, rl, params):
 
     return grids
 
-def excess_asset_demand(rd, rl, params, grids, shocks):
+def excess_asset_demand(params, grids, shocks):
     sGrid = grids['s']
     mGrid = grids['m']
     aGrid = grids['a']
@@ -154,18 +165,30 @@ def get_eq_r(params, shocks):
     r = fsolve(lambda r: get_excess_asset_demand(r, r, params, shocks)  / np.shape(SHOCKS)[0], 0)
     return r
 
+def get_eq_rl(params, rd, shocks):
+    #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
+    r = fsolve(lambda rl: get_excess_asset_demand(rd, rl, params, shocks)  / np.shape(SHOCKS)[0], rd+0.01)
+    return r
+
 def get_excess_asset_demand(rd, rl, params, shocks):
-    return excess_asset_demand(rd, rl, params, get_policy_functions(rd, rl, params), shocks)
+    if rd > rl: return inf 
+    return excess_asset_demand(params, get_policy_functions(rd, rl, params), shocks)
 
 def paramfun(params):
     return get_eq_r(params, SHOCKS)
 
+def paramfun2(params):
+    try:
+        return get_eq_rl(params, 0.01, SHOCKS)
+    except:
+        return np.array([np.nan])
+
 def create_grid(aMax, numA, aBar):
     """Creates initial grid for a"""
-    a = exp(exp(exp(np.linspace(0, log(log(log(aMax+1)+1)+1), numA))-1)-1)-1 + aBar
-    if 0 not in a:
-        a = np.sort(np.append(a, 0))
-    return a
+    grid = exp(exp(exp(np.linspace(0, log(log(log(aMax+1)+1)+1), numA))-1)-1)-1 + aBar
+    if 0 not in grid:
+        grid = np.sort(np.append(grid, 0))
+    return grid
 
 def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     """Hyperbolic Euler-equation"""
