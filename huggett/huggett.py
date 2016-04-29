@@ -175,7 +175,10 @@ def get_excess_asset_demand(rd, rl, params, shocks):
     return excess_asset_demand(params, get_policy_functions(rd, rl, params), shocks)
 
 def paramfun(params):
-    return get_eq_r(params, SHOCKS)
+    try:
+        return get_eq_r(params, SHOCKS)
+    except:
+        return np.array([np.nan])
 
 def paramfun2(params):
     try:
