@@ -1,18 +1,19 @@
-import Data.Matrix (fromList)
 import Control.Applicative ((<$>), (<*>))
+import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
 
 
 -- Type definitions
 
-type LiquidAsset = Float
-type FixedAsset = Float
+type LiquidAsset = Double
+type FixedAsset = Double
 
 type Assets = (LiquidAsset, FixedAsset)
-type Income = Float
-type Consumption = Float
+type Income = Double
+type Consumption = Double
 
-type Utils = Float
-type MU = Float
+type Utils = Double
+type MU = Double
 
 type AssetGrid = [Assets]
 type ValueGrid = [Utils]
@@ -58,63 +59,58 @@ gammaset y (al, af) (al', af') = and [
     af' > afbar, -- borrowing constraint
     c > 0,       -- Inada-conditions
     c <= al + y  -- liquidity constraint
-    ] where c = h y (al, af) (al', af') -- might need nat. borr. constr.!!!!
+    ] where c = h y (al, af) (al', af') -- might need nat. borr. constr.!!!! - actually I don't think so
 
-wfun :: Assets -> Assets -> Utils
-
-wfun' :: Assets -> Assets -> MU
-
-wnext :: Income -> Assets -> Assets -> Income -> Utils
-wnext y a@(al, af) a'@(al', af') y' =
-    u c + betahat*delta/beta * (wfun .- (((1-beta)*) . ubar . iubar' . wfun') $ (al'+y', af'+y'))
+wnext :: (Assets -> Utils) -> (Assets -> (MU, MU)) -> Income -> Assets -> Assets -> Income -> Utils
+wnext wfun wfun' y a@(al, af) a'@(al', af') y' =
+    u c + betahat*delta/beta * (wfun .- (((1-beta)*) . ubar y a . iubar' y a . wfun') $ (al'+y', af'+y'))
     where c = h y a a'
 
-ewnext :: State -> Assets -> Assets -> Utils
-ewnext H a a' = (map (wnext yh a a') ye) `dp` ph
-ewnext L a a' = (map (wnext yl a a') ye) `dp` pl
+ewnext :: (ValueGrid, ValueGrid) -> State -> Assets -> Assets -> Utils
+ewnext (vl, vh) H a a' = (wnext (findW aGrid vl) (findW' aGrid vl) yh a a' yl) * (ph !! 1) + (wnext (findW aGrid vh) (findW' aGrid vh) yh a a' yh) * (ph !! 0)
+ewnext (vl, vh) L a a' = (wnext (findW aGrid vl) (findW' aGrid vl) yl a a' yl) * (pl !! 1) + (wnext (findW aGrid vh) (findW' aGrid vh) yl a a' yh) * (pl !! 0)
 
-
-t :: State -> ValueGrid -> ValueGrid
-t H v = [maximum $ map (ewnext H a) (filter (gammaset yh a) aGrid) | a <- aGrid]
-t L v = [maximum $ map (ewnext L a) (filter (gammaset yl a) aGrid) | a <- aGrid]
+t :: State -> (ValueGrid, ValueGrid) -> ValueGrid
+t H v = [maximum $ map (ewnext v H a) (filter (gammaset yh a) aGrid) | a <- aGrid]
+t L v = [maximum $ map (ewnext v L a) (filter (gammaset yl a) aGrid) | a <- aGrid]
 
 t2 :: (ValueGrid, ValueGrid) -> (ValueGrid, ValueGrid)
-t2 (vh, vl) = (t H vh, t L vl)
+t2 v = (t H v, t L v)
 
 
 -- Default values and finding the solution
 
-vlist :: (ValueGrid, ValueGrid) -> [(ValueGrid, ValueGrid)]
-vlist = iterate t2
+-- vlist :: (ValueGrid, ValueGrid) -> [(ValueGrid, ValueGrid)]
+-- vlist = iterate t2
 
-vListDef :: [(ValueGrid, ValueGrid)]
-vListDef = vlist $ zip aGrid aGrid
+-- vListDef :: [(ValueGrid, ValueGrid)]
+-- vListDef = vlist $ zip aGrid aGrid
 
-findv :: Float -> [(ValueGrid, ValueGrid)] -> (ValueGrid, ValueGrid)
-findv (v:v':vs) eps = if dist2 v v' < eps
-                      then v'
-                      else findv eps (v':vs)
+-- findv :: Double -> [(ValueGrid, ValueGrid)] -> (ValueGrid, ValueGrid)
+-- findv (v:v':vs) eps = if dist2 v v' < eps
+--                       then v'
+--                       else findv eps (v':vs)
 
 -- Helper functions
 
-dist :: ValueGrid -> ValueGrid -> Float
+dist :: ValueGrid -> ValueGrid -> Double
 dist v v' = maximum . map abs $ zipWith (\x y -> (x-y)/y) v v'
 
-dist2 :: (ValueGrid, ValueGrid) -> (ValueGrid, ValueGrid) -> Float
+dist2 :: (ValueGrid, ValueGrid) -> (ValueGrid, ValueGrid) -> Double
 dist2 (vh, vl) (vh', vl') = max (dist vh vh') (dist vl vl')
 
-crra :: Float -> Consumption -> Utils
+crra :: Double -> Consumption -> Utils
 crra 1 c = log c
 crra g c = c**(1-g) / (1-g)
 
-crra' :: Float -> Consumption -> MU
+crra' :: Double -> Consumption -> MU
 crra' g c = c ** (-g)
 
-invcrra :: Float -> Utils -> Consumption
+invcrra :: Double -> Utils -> Consumption
 invcrra 1 u = exp u
 invcrra g u = ((1-g) * u) ** (1/(1-g))
 
-invcrra' :: Float -> MU -> Consumption
+invcrra' :: Double -> MU -> Consumption
 invcrra' g mu = mu ** (-1/g)
 
 (.-) :: (Num b) => (a -> b) -> (a -> b) -> (a -> b)
@@ -124,24 +120,43 @@ h :: Income -> Assets -> Assets -> Consumption
 h y (al, af) (al', af') = y + al + af - al'/rl - af'/rf - p af af'
 
 ubar :: Income -> Assets -> Assets -> Utils
-ubar = u . h
+ubar y a a' = u $ h y a a'  -- ugly but works
 
 -- iubar' :: Income -> Assets -> MU -> Assets
 -- iubar' y (al', af') (m1, m2) =
 --     let af = ip' af' (m1-m2) in (al, af) where
 --         al = (iu' m1) + al'/rl + af'/rf - y - af
 
-iubar' :: Income -> Assets -> MU -> Assets
+iubar' :: Income -> Assets -> (MU, MU) -> Assets
 iubar' y (al', af') (m1, m2) =
     let af = ip' af' (m1-m2) in
         let al = (iu' m1) + al'/rl + af'/rf - y - af in
             (al, af)
 
-dp :: [Num] -> [Num] -> Num
+dp :: [Double] -> [Double] -> Double
 l1 `dp` l2 = sum $ zipWith (*) l1 l2
 
-linspace :: Float -> Float -> Float -> [Float]
+linspace :: Double -> Double -> Double -> [Double]
 linspace a b n = [a, a+(b-a)/(n-1) .. b]
+    
+findW :: [Assets] -> [Utils] -> Assets -> Utils
+findW k0 w0 = mapFind $ M.fromAscList (zip k0 w0)
+    where mapFind m a = fromMaybe (error "Cannot find value in Map") (M.lookup a m) 
 
+-- problem: W : R^2 -> R => W' : R^2 -> R^2
+mapDiff :: M.Map Double Double -> Double -> Double
+mapDiff m a =
+    case (M.lookupLT a m, M.lookup a m, M.lookupGT a m) of 
+        (Just (al, avl), _, Just (ah, avh)) -> (avh-avl) / (ah-al)
+        (Just (al, avl), Just av, Nothing) -> (av-avl) / (a-al)
+        (Nothing, Just av, Just (ah, avh)) -> (avh-av) / (ah-a)
+        _ -> error "Error in mapDiff"
+
+findW' :: [Assets] -> [Utils] -> Assets -> (MU, MU)
+findW' k0 w0 (al, ah) =
+    let ml = M.fromAscList $ zip (map fst . filter (\a -> snd a == ah) $ k0) w0
+        mh = M.fromAscList $ zip (map snd . filter (\a -> fst a == al) $ k0) w0
+    in  (mapDiff ml al, mapDiff mh ah)
+        
 yh = maximum ye
 yl = minimum ye

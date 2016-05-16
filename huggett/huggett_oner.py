@@ -22,7 +22,7 @@ def mu(c, gamma):
     """Marginal utility function"""
     return c ** (-gamma)
 
-def get_policy_functions(rd, rl, params):
+def get_policy_functions(r, params):
     beta = params['beta']
     betahat = params['betahat']
     gamma = params['gamma']
@@ -32,7 +32,7 @@ def get_policy_functions(rd, rl, params):
     aBar = params['aBar']
 
     # Natural borrowing constraint
-    if rl > 0: aBar = max(aBar * rl, -np.min(e) + 1e-4) / rl
+    if r > 0: aBar = max(aBar * r, -np.min(e) + 1e-4) / r
 
     es = range(0, len(e))
 
@@ -40,23 +40,9 @@ def get_policy_functions(rd, rl, params):
     aMax = 10
     numA = 30
     aGrid = create_grid(aMax, numA, aBar)
-    idx_l = aGrid < 0
-    idx_d = aGrid >= 0
-    if rl > rd:
-        aGrid = np.hstack([aGrid[idx_l],
-                           np.array([-inf]),
-                           np.array([inf]),
-                           aGrid[idx_d]
-                          ])
-        idx_l = aGrid < 0
-        idx_d = aGrid >= 0
-        aGrid[aGrid == -inf] = 0
-        aGrid[aGrid == inf] = 0
 
     # Initialization
-    mNext = np.vstack(((1+rl) * np.expand_dims(aGrid[idx_l], 1) + np.expand_dims(e, 0) - aBar,
-                       (1+rd) * np.expand_dims(aGrid[idx_d], 1) + np.expand_dims(e, 0) - aBar
-                      ))
+    mNext = (1+r) * np.expand_dims(aGrid, 1) + np.expand_dims(e, 0) - aBar
     mGrid = mNext
     c = mGrid
 
@@ -79,16 +65,8 @@ def get_policy_functions(rd, rl, params):
 
         # Calculate new policy function
         muNext = mu(cNext, gamma)
-        cNewD = euler(muNext, dCdM, rd, beta, betahat, delta, Pi) ** (-1/gamma)
-        cNewL = euler(muNext, dCdM, rl, beta, betahat, delta, Pi) ** (-1/gamma)
-        cNew = np.zeros_like(cNewD)
-        cNew[idx_d, :] = cNewD[idx_d, :]
-        cNew[idx_l, :] = cNewL[idx_l, :]
+        cNew = euler(muNext, dCdM, r, beta, betahat, delta, Pi) ** (-1/gamma)
         mGridNew = np.expand_dims(aGrid, 1) + cNew - aBar
-
-        print(aGrid)
-        print(cNew[aGrid==0, :])
-        print(cNew)
 
         # Compare policy functions
         cNewComp = np.zeros(np.shape(c))
@@ -104,7 +82,7 @@ def get_policy_functions(rd, rl, params):
         c = cNew
         mGrid = mGridNew
 
-    # sGrid = (mGrid - np.expand_dims(e, 0) + aBar) / (1+rl)
+    # sGrid = (mGrid - np.expand_dims(e, 0) + aBar) / (1+r)
     sGrid = c - np.expand_dims(e, 0) + np.expand_dims(aGrid, 1)
     grids = {'a': aGrid,
              'm': mGrid,
@@ -115,7 +93,7 @@ def get_policy_functions(rd, rl, params):
 
     return grids
 
-def excess_asset_demand(params, grids, shocks):
+def excess_asset_demand(params, grids, shocks, return_distr=False):
     sGrid = grids['s']
     mGrid = grids['m']
     aGrid = grids['a']
@@ -161,34 +139,27 @@ def excess_asset_demand(params, grids, shocks):
             aNow[idx] = sSplines[i](simA[idx, t-1])
         simA[:, t] = np.maximum(aNow, aBar)
 
+    if return_distr:
+        return simA[:, -1]
     return np.sum(simA[:, -1])
 
 def get_eq_r(params, shocks):
     #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
-    r = fsolve(lambda r: get_excess_asset_demand(r, r, params, shocks)  / np.shape(SHOCKS)[0], 0)
+    r = fsolve(lambda r: get_excess_asset_demand(r, params, shocks)  / np.shape(SHOCKS)[0], 0)
     return r
 
-def get_eq_rl(params, rd, shocks):
-    #r = broyden1(lambda r: get_excess_asset_demand(r, params, shocks), 0)
-    r = fsolve(lambda rl: get_excess_asset_demand(rd, rl, params, shocks)  / np.shape(SHOCKS)[0], rd+0.01)
-    return r
+def get_asset_distribution(r, params, shocks):
+    return excess_asset_demand(params, get_policy_functions(r, params), shocks, return_distr=True)
 
 def get_eq_r_het(paramlist, shocks):
     return sum(s * get_eq_r(params, shocks) for s, params in paramlist)
 
-def get_excess_asset_demand(rd, rl, params, shocks):
-    if rd > rl: return inf 
-    return excess_asset_demand(params, get_policy_functions(rd, rl, params), shocks)
+def get_excess_asset_demand(r, params, shocks):
+    return excess_asset_demand(params, get_policy_functions(r, params), shocks)
 
 def paramfun(params):
     try:
         return get_eq_r(params, SHOCKS)
-    except:
-        return np.array([np.nan])
-
-def paramfun2(params):
-    try:
-        return get_eq_rl(params, 0.01, SHOCKS)
     except:
         return np.array([np.nan])
 
@@ -210,4 +181,4 @@ def euler(muNext, dCdM, r, beta, betahat, delta, Pi):
     return ((1+r) * beta * delta * (dCdM + (1-dCdM)/betahat) * muNext) @ Pi
 
 np.random.seed(19911110)
-SHOCKS = np.random.rand(500, 100)
+SHOCKS = np.random.rand(5000, 1000)
